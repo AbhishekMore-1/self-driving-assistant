@@ -12,26 +12,16 @@ def main():
     # Set wide view for page
     st.set_page_config(layout="wide")
     
-    # Custom CSS for header
-    font_css = """
-    <style>
-    button[data-baseweb="tab"] {
-    font-size: 26px;
-    }
-    </style>
-    """
-    st.write(font_css, unsafe_allow_html=True)
-
     # Download external dependencies.
     for filename in EXTERNAL_DEPENDENCIES.keys():
         download_file(filename)
 
-    # Tab view
-    tabs = st.tabs(('About Team','Object Detection'))
-    # UI Options 
-    with tabs[0]:
-        aboutTeam() 
-    with tabs[1]:
+    # Select Dropbox
+    app_mode = st.sidebar.selectbox("Select section",
+        ['About Team','Object Detection'])
+    if app_mode == "About Team":
+        aboutTeam()
+    elif app_mode == "Object Detection":
         objDetection()
 
 # This file downloader demonstrates Streamlit animation.
@@ -74,8 +64,9 @@ def download_file(file_path):
 
 # About Team UI 
 def aboutTeam():
-    # Render the readme as markdown using st.markdown.
-    st.markdown(get_file_content_as_string("intro.md"),unsafe_allow_html=True)
+    st.sidebar.success('To continue select "Object Detection".')
+    # Render the intro as markdown using st.markdown.
+    st.markdown(open("intro.md").read(),unsafe_allow_html=True)
 
 # This is the main app app itself, which appears when the user selects "Run the app".
 def objDetection():
@@ -120,15 +111,19 @@ def objDetection():
     image_url = os.path.join(DATA_URL_ROOT, selected_frame)
     image = load_image(image_url)
 
-    # Add boxes for objects on the image. These are the boxes for the ground image.
-    boxes = metadata[metadata.frame == selected_frame].drop(columns=["frame"])
-    draw_image_with_boxes(image, boxes, "Ground Truth",
-        "**Human-annotated data** (frame `%i`)" % selected_frame_index)
+    original_img, _, processed_img = st.columns([1,0.01,1])
 
-    # Get the boxes for the objects detected by YOLO by running the YOLO model.
-    yolo_boxes = yolo_v3(image, confidence_threshold, overlap_threshold)
-    draw_image_with_boxes(image, yolo_boxes, "Real-time Computer Vision",
-        "**YOLO v3 Model** (overlap `%3.1f`) (confidence `%3.1f`)" % (overlap_threshold, confidence_threshold))
+    with original_img:
+        # Add boxes for objects on the image. These are the boxes for the ground image.
+        boxes = metadata[metadata.frame == selected_frame].drop(columns=["frame"])
+        draw_image_with_boxes(image, boxes, "Ground Truth",
+            "**Human-annotated data** (frame `%i`)" % selected_frame_index)
+
+    with processed_img:
+        # Get the boxes for the objects detected by YOLO by running the YOLO model.
+        yolo_boxes = yolo_v3(image, confidence_threshold, overlap_threshold)
+        draw_image_with_boxes(image, yolo_boxes, "Real-time Computer Vision",
+            "**YOLO v3 Model** (overlap `%3.1f`) (confidence `%3.1f`)" % (overlap_threshold, confidence_threshold))
 
 # This sidebar UI is a little search engine to find certain object types.
 def frame_selector_ui(summary):
@@ -189,13 +184,6 @@ def draw_image_with_boxes(image, boxes, header, description):
     st.subheader(header)
     st.markdown(description)
     st.image(image_with_boxes.astype(np.uint8), use_column_width=True)
-
-# Download a single file and make its content available as a string.
-@st.experimental_singleton(show_spinner=False)
-def get_file_content_as_string(path):
-    url = 'https://raw.githubusercontent.com/streamlit/demo-self-driving/master/' + path
-    response = urllib.request.urlopen(url)
-    return response.read().decode("utf-8")
 
 # This function loads an image from Streamlit public repo on S3. We use st.cache on this
 # function as well, so we can reuse the images across runs.
