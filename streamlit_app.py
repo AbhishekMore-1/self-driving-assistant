@@ -163,6 +163,36 @@ def process_image(image):
     
     return weighted_img(line_image,image)
 
+# Pre-process Image
+def preProcessImg(img):
+    # Pre-processing image: resize image
+    height, width, _ = img.shape
+    width = int(480/height*width)
+    height = 480
+    img = cv2.resize(img,(width,height))
+    return img
+
+# Upload Image
+def uploadImage(key):
+
+    uploaded_file = st.file_uploader("Choose a Image file",key=key)
+    if uploaded_file is not None:
+        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+
+        # Pre-processing image: resize image
+        return preProcessImg(img)
+    
+    return cv2.cvtColor(preProcessImg(cv2.imread('img.jpg')),cv2.COLOR_BGR2RGB)
+
+def lane_detection():
+    image = uploadImage(1)
+    h = image.shape[0]
+    w = image.shape[1]
+    image = cv2.resize(process_image(cv2.resize(image,(960,540))),(w,h))
+    st.image(image, use_column_width=True)
+
 # Streamlit encourages well-structured code, like starting execution in a main() function.
 def main():
     # Set wide view for page
@@ -174,11 +204,13 @@ def main():
 
     # Select Dropbox
     app_mode = st.sidebar.selectbox("Select section",
-        ['About Team','Object Detection'])
+        ['About Team','Object Detection','Lane Detection'])
     if app_mode == "About Team":
         aboutTeam()
     elif app_mode == "Object Detection":
         objDetection()
+    elif app_mode == "Lane Detection":
+        lane_detection()
 
 # This file downloader demonstrates Streamlit animation.
 def download_file(file_path):
@@ -220,7 +252,7 @@ def download_file(file_path):
 
 # About Team UI 
 def aboutTeam():
-    st.sidebar.success('To continue select "Object Detection".')
+    st.sidebar.success('To continue select "Object/Lane Detection".')
     # Render the intro as markdown using st.markdown.
     st.markdown(open("intro.md").read(),unsafe_allow_html=True)
 
@@ -331,9 +363,6 @@ def draw_image_with_boxes(image, boxes, header, description):
         "trafficLight": [255, 255, 0],
         "biker": [255, 0, 255],
     }
-    h = image.shape[0]
-    w = image.shape[1]
-    image = cv2.resize(process_image(cv2.resize(image,(960,540))),(w,h))
     image_with_boxes = image.astype(np.float64)
     for _, (xmin, ymin, xmax, ymax, label) in boxes.iterrows():
         image_with_boxes[int(ymin):int(ymax),int(xmin):int(xmax),:] += LABEL_COLORS[label]
