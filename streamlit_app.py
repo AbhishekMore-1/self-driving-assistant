@@ -7,6 +7,162 @@ import pandas as pd
 import numpy as np
 import os, urllib, cv2
 
+def grayscale(img):
+    """Applies the Grayscale transform
+    This will return an image with only one color channel
+    but NOTE: to see the returned image as grayscale
+    (assuming your grayscaled image is called 'gray')
+    you should call plt.imshow(gray, cmap='gray')"""
+    return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    # Or use BGR2GRAY if you read an image with cv2.imread()
+    # return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+def canny(img, low_threshold, high_threshold):
+    """Applies the Canny transform"""
+    return cv2.Canny(img, low_threshold, high_threshold)
+
+def gaussian_blur(img, kernel_size):
+    """Applies a Gaussian Noise kernel"""
+    return cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
+
+def region_of_interest(img, vertices):
+    """
+    Applies an image mask.
+    
+    Only keeps the region of the image defined by the polygon
+    formed from `vertices`. The rest of the image is set to black.
+    """
+    #defining a blank mask to start with
+    mask = np.zeros_like(img)   
+    
+    #defining a 3 channel or 1 channel color to fill the mask with depending on the input image
+    if len(img.shape) > 2:
+        channel_count = img.shape[2]  # i.e. 3 or 4 depending on your image
+        ignore_mask_color = (255,) * channel_count
+    else:
+        ignore_mask_color = 255
+        
+    #filling pixels inside the polygon defined by "vertices" with the fill color    
+    cv2.fillPoly(mask, vertices, ignore_mask_color)
+    
+    #returning the image only where mask pixels are nonzero
+    masked_image = cv2.bitwise_and(img, mask)
+    return masked_image
+
+
+def draw_lines(img, lines, color=[255, 0, 0], thickness=10):  
+    x_left = []
+    y_left = []
+    
+    x_right = []
+    y_right = []
+    
+    shape = img.shape
+
+    for line in lines:
+        for x1,y1,x2,y2 in line:
+            
+            slope = -(y2 - y1) / (x2 - x1)
+            
+            # Collecting all x and y values from left part of image 
+            if x1 < shape[1]/2 and x2 < shape[1]/2:
+                if 0.25 < slope < 0.8:
+                    x_left += [x1, x2]
+                    y_left += [y1, y2]
+            
+            # Collecting all x and y values from right part of image
+            else:
+                if -0.8 < slope < -0.25:
+                    x_right += [x1, x2]
+                    y_right += [y1, y2]
+            
+    if len(x_left) != 0 and len(y_left) != 0:
+        # Calculating average slope and b from all the points on left - here slope will be negative
+        m,b = np.polyfit(x_left, y_left, 1)
+        min_x = min(x_left)
+        max_x = max(x_left)
+        # Plotting line from x1=(y_max-b)/m, y1=y_max to x2=x_max, y2=m*x_max + b
+        cv2.line(img, (int((shape[0]-b)/m), shape[0]), (max_x, int(max_x * m + b)), color, thickness)
+
+    if len(x_right) != 0 and len(y_right) != 0:
+        # Calculating average slope and b from all the points on right - here slope will be positive
+        m,b = np.polyfit(x_right, y_right, 1)
+        min_x = min(x_right)
+        max_x = max(x_right)
+        # Plotting line from x1=x_min, y1=(x_min*m)+b to x2=(y_max-b)/m, y2=y_max
+        cv2.line(img, (min_x, int(min_x * m + b)), (int((shape[0]-b)/m), shape[0]), color, thickness)
+
+        
+def hough_lines(img, rho, theta, threshold, min_line_len, max_line_gap):
+    """
+    `img` should be the output of a Canny transform.
+        
+    Returns an image with hough lines drawn.
+    """
+    lines = cv2.HoughLinesP(img, rho, theta, threshold, np.array([]), minLineLength=min_line_len, maxLineGap=max_line_gap)
+    line_img = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
+    
+    draw_lines(line_img, lines)
+    return line_img
+
+# Python 3 has support for cool math symbols.
+
+def weighted_img(img, initial_img, α=0.8, β=1., γ=0.):
+    """
+    `img` is the output of the hough_lines(), An image with lines drawn on it.
+    Should be a blank image (all black) with lines drawn on it.
+    
+    `initial_img` should be the image before any processing.
+    
+    The result image is computed as follows:
+    
+    initial_img * α + img * β + γ
+    NOTE: initial_img and img must be the same shape!
+    """
+    return cv2.addWeighted(initial_img, α, img, β, γ)
+
+def process_image(image):
+    color_select= np.copy(image)
+    line_image= np.copy(image)
+    
+    gray = grayscale(color_select)
+    
+    ysize = image.shape[0]
+    xsize = image.shape[1]
+    
+    # Define a kernel size and apply Gaussian smoothing
+    kernel_size = 5
+    blur_gray = gaussian_blur(gray,kernel_size)
+
+    # Define our parameters for Canny and apply
+    low_threshold = 50
+    high_threshold = 150
+
+    edges = canny(blur_gray, low_threshold, high_threshold)
+
+    # This time we are defining a four sided polygon to mask
+    imshape = color_select.shape
+    vertices = np.array([[(50,imshape[0]),(450, 320), (500, 320), (imshape[1],imshape[0])]], dtype=np.int32)
+    masked_edges = region_of_interest(edges, vertices)
+
+    # Define the Hough transform parameters
+    # Make a blank the same size as our image to draw on
+    rho = 2 # distance resolution in pixels of the Hough grid
+    theta = np.pi/180 # angular resolution in radians of the Hough grid
+    threshold = 15     # minimum number of votes (intersections in Hough grid cell)
+    min_line_length = 40 #minimum number of pixels making up a line
+    max_line_gap = 20    # maximum gap in pixels between connectable line segments
+    line_image = np.copy(image)*0 # creating a blank to draw lines on
+
+    #draw_lines(line_image, lines, color=[255, 0, 0], thickness=2)
+    
+    line_image = hough_lines(masked_edges, rho, theta, threshold, min_line_length, max_line_gap)
+
+    # Create a "color" binary image to combine with line image
+    color_edges = np.dstack((edges, edges, edges)) 
+    
+    return weighted_img(line_image,image)
+
 # Streamlit encourages well-structured code, like starting execution in a main() function.
 def main():
     # Set wide view for page
@@ -175,6 +331,9 @@ def draw_image_with_boxes(image, boxes, header, description):
         "trafficLight": [255, 255, 0],
         "biker": [255, 0, 255],
     }
+    h = image.shape[0]
+    w = image.shape[1]
+    image = cv2.resize(process_image(cv2.resize(image,(960,540))),(w,h))
     image_with_boxes = image.astype(np.float64)
     for _, (xmin, ymin, xmax, ymax, label) in boxes.iterrows():
         image_with_boxes[int(ymin):int(ymax),int(xmin):int(xmax),:] += LABEL_COLORS[label]
