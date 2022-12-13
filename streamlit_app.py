@@ -371,10 +371,10 @@ def draw_image_with_boxes(image, boxes, header, description):
         "trafficLight": [255, 255, 0],
         "biker": [255, 0, 255],
     }
-    image_with_boxes = image.astype(np.float64)
+    image_with_boxes = image
     for _, (xmin, ymin, xmax, ymax, label) in boxes.iterrows():
-        image_with_boxes[int(ymin):int(ymax),int(xmin):int(xmax),:] += LABEL_COLORS[label]
-        image_with_boxes[int(ymin):int(ymax),int(xmin):int(xmax),:] /= 2
+        image_with_boxes = cv2.rectangle(image_with_boxes,(xmin,ymax),(xmax,ymin), LABEL_COLORS[label],1)
+        # image_with_boxes = cv2.putText(image_with_boxes, label, (ymin,xmin), cv2.FONT_HERSHEY_SIMPLEX, 1, LABEL_COLORS[label], 1, cv2.LINE_AA)
 
     # Draw the header and image.
     st.subheader(header)
