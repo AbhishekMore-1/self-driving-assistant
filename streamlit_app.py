@@ -204,13 +204,21 @@ def main():
 
     # Select Dropbox
     app_mode = st.sidebar.selectbox("Select section",
-        ['About Team','Object Detection','Lane Detection'])
+        ['About Team','Object Detection','Lane Detection','Final Detection'])
     if app_mode == "About Team":
         aboutTeam()
     elif app_mode == "Object Detection":
         objDetection()
     elif app_mode == "Lane Detection":
         lane_detection()
+    elif app_mode == "Final Detection":
+        final_detection()
+
+def final_detection():
+    video_file = open('project_2.mp4', 'rb')
+    video_bytes = video_file.read()
+
+    st.video(video_bytes)
 
 # This file downloader demonstrates Streamlit animation.
 def download_file(file_path):
